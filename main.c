@@ -45,6 +45,7 @@ int clock = 0;
 int scheduling_algorithm = 0; // 0: FMP, 1: SJF
 float aging_factor = 0.5;
 bool verbose = false;
+bool process_finished = false;
 
 // variaveis relacionadas com SJF
 float ultimo_burst_time = 5;
@@ -178,6 +179,7 @@ void add_to_sjf_queue(Process *process)
         return;
     }
     int i = sjf_queue.count - 1;
+    process->state = 0;
     if (process->estimated_burst_time == 0)
     {
         process->estimated_burst_time = calculate_next_estimated_time(ultimo_burst_time * 1.0, ultimo_burst_time_estimado * 1.0, aging_factor);
@@ -188,6 +190,7 @@ void add_to_sjf_queue(Process *process)
         i--;
     }
     sjf_queue.processes[i + 1] = process;
+    sjf_queue.processes[0]->state = 1;
     sjf_queue.count++;
 }
 
@@ -207,14 +210,14 @@ Process *remove_from_sjf_queue()
     return process;
 }
 
-Process *get_next_pid()
+int get_next_pid()
 {
     if (sjf_queue.processes[0] != NULL)
     {
-        return sjf_queue.processes[0];
+        return sjf_queue.processes[0]->pid;
     }
     else
-        return NULL;
+        return -1;
 };
 
 Process *choose_process_sjf()
@@ -284,6 +287,7 @@ void print_statistics()
 
 int main(int argc, char **argv)
 {
+    Process *current_process = NULL;
     char *input_filename = NULL;
 
     for (int i = 1; i < argc; i++)
@@ -322,6 +326,7 @@ int main(int argc, char **argv)
 
     while (1)
     {
+        int lastPid = 0;
         int solicitouIO = 0;
 
         for (int i = 0; i < process_count; i++)
@@ -358,12 +363,11 @@ int main(int argc, char **argv)
             }
         }
 
-        Process *current_process = NULL;
         if (scheduling_algorithm == 0)
         {
             current_process = choose_process_fmp();
         }
-        else
+        else if (scheduling_algorithm == 1)
         {
             current_process = choose_process_sjf();
         }
@@ -372,13 +376,7 @@ int main(int argc, char **argv)
         {
             current_process->remaining_time--;
             current_process->total_time++;
-            for (int i = 0; i < process_count; i++)
-            {
-                if (processes[i].state == 2)
-                    processes[i].wait_time++;
-                if (processes[i].state == 0)
-                    processes[i].ready_time++;
-            }
+
             if (current_process->remaining_time == 0)
             {
                 current_process->state = 3; // Finished
@@ -411,6 +409,18 @@ int main(int argc, char **argv)
             }
         }
 
+        for (int i = 0; i < process_count; i++)
+        {
+            if (processes[i].state == 2)
+            {
+                processes[i].wait_time++;
+            }
+            if (processes[i].state == 0)
+            {
+                processes[i].ready_time++;
+            }
+        }
+
         int all_finished = 1;
         for (int i = 0; i < process_count; i++)
         {
@@ -425,16 +435,18 @@ int main(int argc, char **argv)
 
         if (verbose)
         {
-            if (current_process != NULL && get_next_pid() != NULL)
+            int nextPID = get_next_pid();
+            if (current_process != NULL && nextPID != -1)
             {
                 printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
                        solicitouIO);
                 printListaDeTerminosIO();
                 if (scheduling_algorithm = 1)
                 {
-                    if (get_next_pid() != current_process && current_process->state != 2 && current_process->state != 3)
+                    if (nextPID != current_process->pid && current_process->remaining_time > 0 && solicitouIO == false)
                     {
                         printf("0\n");
+                        printf("Processo preemptado\n");
                     }
                     else
                     {
