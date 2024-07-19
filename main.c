@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include "osPRNG.h"
 
 #define MAX_PROCESSES 100
 #define MAX_PRIORITY_LEVELS 8
@@ -13,6 +14,7 @@ typedef struct {
     int pid;
     int arrival_time;
     int burst_time;
+    int estimated_burst_time;
     int remaining_time;
     int priority;
     int state; // 0: Ready, 1: Running, 2: Waiting, 3: Finished
@@ -41,16 +43,22 @@ int scheduling_algorithm = 0; // 0: FMP, 1: SJF
 float aging_factor = 0.5;
 bool verbose = false;
 
-int osPRNG() {
-    return rand();
-}
+// variaveis relacionadas com SJF
+int ultimo_burst_time = 5;
+int ultimo_burst_time_estimado = 5;
 
 int IOReq() {
-    return (osPRNG() % PROB_OF_IO_REQ == 0);
+    if (osPRNG() % PROB_OF_IO_REQ == 0)
+        return 1;
+    else
+        return 0;
 }
 
-int IOTerm() {
-    return (osPRNG() % PROB_OF_IO_TERM == 0);
+int IOTerm(){
+    if (osPRNG() % PROB_OF_IO_TERM == 0)
+        return 1;
+    else
+        return 0;
 }
 
 void init_priority_queues() {
@@ -96,9 +104,22 @@ void init_sjf_queue() {
     sjf_queue.count = 0;
 }
 
+
+double calculate_next_estimated_time(float last_burst_time, float previous_estimated_time, float aging_factor) {
+    ultimo_burst_time_estimado = (aging_factor * last_burst_time) + ((1 - aging_factor) * previous_estimated_time);
+    return ultimo_burst_time_estimado;
+}
+
+
 void add_to_sjf_queue(Process *process) {
+    if (process->state == 3) {
+        return;
+    }
     int i = sjf_queue.count - 1;
-    while (i >= 0 && sjf_queue.processes[i]->remaining_time > process->remaining_time) {
+    if (process->estimated_burst_time == 0) {
+        process->estimated_burst_time = calculate_next_estimated_time(ultimo_burst_time * 1.0, ultimo_burst_time_estimado* 1.0, aging_factor);
+    }
+    while (i >= 0 && sjf_queue.processes[i]->estimated_burst_time > process->estimated_burst_time) {
         sjf_queue.processes[i + 1] = sjf_queue.processes[i];
         i--;
     }
@@ -148,6 +169,7 @@ void parse_input(char *filename) {
         process.ready_time = 0;
         process.wait_time = 0;
         process.total_time = 0;
+        process.estimated_burst_time = 0;
         processes[process_count++] = process;
     }
 
@@ -178,7 +200,7 @@ int main(int argc, char **argv) {
             scheduling_algorithm = 0;
         } else if (strcmp(argv[i], "-S") == 0) {
             scheduling_algorithm = 1;
-            if (i + 1 < argc && argv[i + 1][0] != '-') {
+            if (i + 1 < argc && argv[i + 1][0] != '-' && strlen(argv[i + 1]) < 4) {
                 aging_factor = atof(argv[++i]);
             }
         } else if (strcmp(argv[i], "-v") == 0) {
@@ -193,7 +215,6 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    srand(12345);
     parse_input(input_filename);
     init_priority_queues();
     init_sjf_queue();
@@ -237,7 +258,8 @@ int main(int argc, char **argv) {
             }
             if (current_process->remaining_time == 0) {
                 current_process->state = 3; // Finished
-            } else if (IOReq()) {
+                ultimo_burst_time = current_process->burst_time;
+            } else if (IOReq() && current_process->state == 1) {
                 current_process->state = 2; // Wait
             } else {
                 if (scheduling_algorithm == 0) {
@@ -272,7 +294,7 @@ int main(int argc, char **argv) {
 
         clock++;
     }
-
     print_statistics();
+    printf("aging: %f", aging_factor);
     return 0;
 }
