@@ -44,8 +44,8 @@ float aging_factor = 0.5;
 bool verbose = false;
 
 // variaveis relacionadas com SJF
-int ultimo_burst_time = 5;
-int ultimo_burst_time_estimado = 5;
+float ultimo_burst_time = 5;
+float ultimo_burst_time_estimado = 5;
 
 int IOReq() {
     if (osPRNG() % PROB_OF_IO_REQ == 0)
@@ -165,7 +165,7 @@ void parse_input(char *filename) {
         Process process;
         sscanf(line, "%d:%d:%d:%d", &process.pid, &process.arrival_time, &process.burst_time, &process.priority);
         process.remaining_time = process.burst_time;
-        process.state = 0; // Ready
+        process.state = -1; // not in processor
         process.ready_time = 0;
         process.wait_time = 0;
         process.total_time = 0;
@@ -177,10 +177,10 @@ void parse_input(char *filename) {
 }
 
 void print_statistics() {
-    printf("=========+=================+=================+============\n");
-    printf("Processo | Tempo total     | Tempo total     | Tempo total\n");
-    printf("         | em estado Ready | em estado Wait  | no sistema\n");
-    printf("=========+=================+=================+============\n");
+    printf("=========+=================+=================+============   \n");
+    printf("Processo | Tempo total     | Tempo total     | Tempo total   \n");
+    printf("         | em estado Ready | em estado Wait  | no processador\n");
+    printf("=========+=================+=================+============    \n");
 
     for (int i = 0; i < process_count; i++) {
         printf("%d       | %d               | %d               | %d\n", processes[i].pid, processes[i].ready_time,
@@ -221,7 +221,7 @@ int main(int argc, char **argv) {
 
     while (1) {
         for (int i = 0; i < process_count; i++) {
-            if (processes[i].arrival_time == clock && processes[i].state == 0) {
+            if (processes[i].arrival_time == clock && processes[i].state == -1) {
                 processes[i].state = 0; // Ready
                 if (scheduling_algorithm == 0) {
                     enqueue(&priority_queues[processes[i].priority], &processes[i]);
@@ -257,8 +257,9 @@ int main(int argc, char **argv) {
                        IOReq(), IOTerm(), current_process->state);
             }
             if (current_process->remaining_time == 0) {
+                update_statistics(current_process);
                 current_process->state = 3; // Finished
-                ultimo_burst_time = current_process->burst_time;
+                ultimo_burst_time = current_process->burst_time * 1.0;
             } else if (IOReq() && current_process->state == 1) {
                 current_process->state = 2; // Wait
             } else {
@@ -278,7 +279,7 @@ int main(int argc, char **argv) {
         }
 
         for (int i = 0; i < process_count; i++) {
-            if (processes[i].state != 3) {
+            if (processes[i].state != 3 && clock >= processes[i].arrival_time) {
                 update_statistics(&processes[i]);
             }
         }
@@ -295,6 +296,8 @@ int main(int argc, char **argv) {
         clock++;
     }
     print_statistics();
-    printf("aging: %f", aging_factor);
+    // printf("aging: %f", aging_factor);
+    // printf("ultimo burst: %f", ultimo_burst_time);
+    // printf("ultimo burst estimado: %f", ultimo_burst_time_estimado);
     return 0;
 }
