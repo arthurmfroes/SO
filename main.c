@@ -15,7 +15,7 @@ typedef struct
     int pid;
     int arrival_time;
     int burst_time;
-    int estimated_burst_time;
+    float estimated_burst_time;
     int remaining_time;
     int priority;
     int state; // 0: Ready, 1: Running, 2: Waiting, 3: Finished
@@ -77,7 +77,7 @@ void printListaDeTerminosIO () {
             if(listaTerminosIO[i] != -1) {printf("%d:", listaTerminosIO[i]);}
         };
     } else {
-        printf("0");
+        printf("0:");
     }
 };
 
@@ -169,7 +169,7 @@ void add_to_sjf_queue(Process *process)
     {
         process->estimated_burst_time = calculate_next_estimated_time(ultimo_burst_time * 1.0, ultimo_burst_time_estimado * 1.0, aging_factor);
     }
-    while (i >= 0 && sjf_queue.processes[i]->estimated_burst_time > process->estimated_burst_time)
+    while (i >= 0 && sjf_queue.processes[i]->estimated_burst_time > process->estimated_burst_time && process->state != 2 && sjf_queue.processes[i]-> state != 2)
     {
         sjf_queue.processes[i + 1] = sjf_queue.processes[i];
         i--;
@@ -189,9 +189,14 @@ Process *remove_from_sjf_queue()
     {
         sjf_queue.processes[i - 1] = sjf_queue.processes[i];
     }
+    process->state=1;
     sjf_queue.count--;
     return process;
 }
+
+Process *get_next_pid() {
+    return sjf_queue.processes[0];
+};
 
 Process *choose_process_sjf()
 {
@@ -346,7 +351,6 @@ int main(int argc, char **argv)
 
         if (current_process != NULL)
         {
-            current_process->state = 1; // Running
             current_process->remaining_time--;
             if (current_process->remaining_time == 0)
             {
@@ -406,14 +410,15 @@ int main(int argc, char **argv)
             printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
                    solicitouIO);
             printListaDeTerminosIO();
-            printf("%d\n", current_process->state);
+            if (scheduling_algorithm = 1) {
+                if (get_next_pid() != current_process && (current_process->state != 2)) {printf("3\n");
+                } else { printf("%d\n", current_process->state); };
+            };
         }
         limparListaDeTerminosIO();
         clock++;
     }
     print_statistics();
-    // printf("aging: %f", aging_factor);
-    // printf("ultimo burst: %f", ultimo_burst_time);
-    // printf("ultimo burst estimado: %f", ultimo_burst_time_estimado);
+
     return 0;
 }
