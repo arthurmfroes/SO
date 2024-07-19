@@ -407,13 +407,15 @@ int main(int argc, char **argv)
 
         if (verbose)
         {
-            printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
-                   solicitouIO);
-            printListaDeTerminosIO();
-            if (scheduling_algorithm = 1) {
-                if (get_next_pid() != current_process && (current_process->state != 2)) {printf("3\n");
-                } else { printf("%d\n", current_process->state); };
-            };
+            if (current_process != NULL) {
+                printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
+                    solicitouIO);
+                printListaDeTerminosIO();
+                if (scheduling_algorithm = 1) {
+                    if (get_next_pid() != current_process && (current_process->state != 2)) {printf("3\n");
+                    } else { printf("%d\n", current_process->state); };
+                };
+            }
         }
         limparListaDeTerminosIO();
         clock++;
