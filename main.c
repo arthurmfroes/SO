@@ -54,29 +54,42 @@ float ultimo_burst_time_estimado = 5;
 int listaTerminosIO[MAX_PROCESSES];
 int existem_terminos = 0;
 
-void inserirNaListaDeTerminosIO (int pid) {
+void inserirNaListaDeTerminosIO(int pid)
+{
     existem_terminos = 1;
-    for (int i = 0; i < MAX_PROCESSES; i++) {
-        if (listaTerminosIO[i] == -1) {
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (listaTerminosIO[i] == -1)
+        {
             listaTerminosIO[i] = pid;
             break;
         };
     };
 };
 
-void limparListaDeTerminosIO () {
+void limparListaDeTerminosIO()
+{
     existem_terminos = 0;
-    for (int i = 0; i < MAX_PROCESSES; i++) {
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
         listaTerminosIO[i] = -1;
     };
 };
 
-void printListaDeTerminosIO () {
-    if (existem_terminos == 1) {
-        for (int i = 0; i < MAX_PROCESSES; i++) {
-            if(listaTerminosIO[i] != -1) {printf("%d:", listaTerminosIO[i]);}
+void printListaDeTerminosIO()
+{
+    if (existem_terminos == 1)
+    {
+        for (int i = 0; i < MAX_PROCESSES; i++)
+        {
+            if (listaTerminosIO[i] != -1)
+            {
+                printf("%d:", listaTerminosIO[i]);
+            }
         };
-    } else {
+    }
+    else
+    {
         printf("0:");
     }
 };
@@ -160,7 +173,7 @@ double calculate_next_estimated_time(float last_burst_time, float previous_estim
 
 void add_to_sjf_queue(Process *process)
 {
-    if (process->state == 3)
+    if (process->state == 3 || process->remaining_time <= 0)
     {
         return;
     }
@@ -169,7 +182,7 @@ void add_to_sjf_queue(Process *process)
     {
         process->estimated_burst_time = calculate_next_estimated_time(ultimo_burst_time * 1.0, ultimo_burst_time_estimado * 1.0, aging_factor);
     }
-    while (i >= 0 && sjf_queue.processes[i]->estimated_burst_time > process->estimated_burst_time && process->state != 2 && sjf_queue.processes[i]-> state != 2)
+    while (i >= 0 && sjf_queue.processes[i]->estimated_burst_time > process->estimated_burst_time)
     {
         sjf_queue.processes[i + 1] = sjf_queue.processes[i];
         i--;
@@ -189,13 +202,19 @@ Process *remove_from_sjf_queue()
     {
         sjf_queue.processes[i - 1] = sjf_queue.processes[i];
     }
-    process->state=1;
+    process->state = 1;
     sjf_queue.count--;
     return process;
 }
 
-Process *get_next_pid() {
-    return sjf_queue.processes[0];
+Process *get_next_pid()
+{
+    if (sjf_queue.processes[0] != NULL)
+    {
+        return sjf_queue.processes[0];
+    }
+    else
+        return NULL;
 };
 
 Process *choose_process_sjf()
@@ -352,9 +371,16 @@ int main(int argc, char **argv)
         if (current_process != NULL)
         {
             current_process->remaining_time--;
+            current_process->total_time++;
+            for (int i = 0; i < process_count; i++)
+            {
+                if (processes[i].state == 2)
+                    processes[i].wait_time++;
+                if (processes[i].state == 0)
+                    processes[i].ready_time++;
+            }
             if (current_process->remaining_time == 0)
             {
-                update_statistics(current_process);
                 current_process->state = 3; // Finished
                 ultimo_burst_time = current_process->burst_time * 1.0;
             }
@@ -378,18 +404,10 @@ int main(int argc, char **argv)
                         enqueue(&priority_queues[current_process->priority], current_process);
                     }
                 }
-                else
+                else if (scheduling_algorithm == 1 && current_process->state != 3 && current_process->state != 2)
                 {
                     add_to_sjf_queue(current_process);
                 }
-            }
-        }
-
-        for (int i = 0; i < process_count; i++)
-        {
-            if (processes[i].state != 3 && clock >= processes[i].arrival_time)
-            {
-                update_statistics(&processes[i]);
             }
         }
 
@@ -407,13 +425,21 @@ int main(int argc, char **argv)
 
         if (verbose)
         {
-            if (current_process != NULL) {
+            if (current_process != NULL && get_next_pid() != NULL)
+            {
                 printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
-                    solicitouIO);
+                       solicitouIO);
                 printListaDeTerminosIO();
-                if (scheduling_algorithm = 1) {
-                    if (get_next_pid() != current_process && (current_process->state != 2)) {printf("3\n");
-                    } else { printf("%d\n", current_process->state); };
+                if (scheduling_algorithm = 1)
+                {
+                    if (get_next_pid() != current_process && current_process->state != 2 && current_process->state != 3)
+                    {
+                        printf("0\n");
+                    }
+                    else
+                    {
+                        printf("%d\n", current_process->state);
+                    };
                 };
             }
         }
