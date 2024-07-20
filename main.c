@@ -389,16 +389,10 @@ int main(int argc, char **argv)
             }
             else
             {
-                if (scheduling_algorithm == 0)
+                if (scheduling_algorithm == 0 && current_process->state != 3 && current_process->state != 2)
                 {
                     if (current_process->remaining_time > 0)
                     {
-                        int new_priority = current_process->priority + 1;
-                        if (new_priority >= MAX_PRIORITY_LEVELS)
-                        {
-                            new_priority = MAX_PRIORITY_LEVELS - 1;
-                        }
-                        current_process->priority = new_priority;
                         enqueue(&priority_queues[current_process->priority], current_process);
                     }
                 }
