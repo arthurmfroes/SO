@@ -27,7 +27,6 @@ typedef struct
 typedef struct
 {
     Process *queue[MAX_QUEUE_SIZE];
-    int front;
     int rear;
 } PriorityQueue;
 
@@ -115,7 +114,6 @@ void init_priority_queues()
 {
     for (int i = 0; i < MAX_PRIORITY_LEVELS; i++)
     {
-        priority_queues[i].front = -1;
         priority_queues[i].rear = -1;
     }
 }
@@ -126,26 +124,27 @@ void enqueue(PriorityQueue *pq, Process *process)
     {
         return; // Fila cheia
     }
-    if (pq->front == -1)
-    {
-        pq->front = 0;
-    }
     pq->rear++;
     pq->queue[pq->rear] = process;
+    process->state = 0;
 }
 
 Process *dequeue(PriorityQueue *pq)
 {
-    if (pq->front == -1 || pq->front > pq->rear)
+    if (pq->rear == -1)
     {
         return NULL; // Fila vazia
     }
-    Process *process = pq->queue[pq->front];
-    pq->front++;
-    if (pq->front > pq->rear)
+    Process *process = pq->queue[0];
+    process->state = 1;
+
+    // Move all elements one position to the front
+    for (int i = 1; i <= pq->rear; i++)
     {
-        pq->front = pq->rear = -1;
+        pq->queue[i - 1] = pq->queue[i];
     }
+    pq->rear--;
+
     return process;
 }
 
@@ -153,7 +152,7 @@ Process *choose_process_fmp()
 {
     for (int i = 0; i < MAX_PRIORITY_LEVELS; i++)
     {
-        if (priority_queues[i].front != -1)
+        if (priority_queues[i].rear != -1)
         {
             return dequeue(&priority_queues[i]);
         }
@@ -212,33 +211,34 @@ Process *remove_from_sjf_queue()
 
 int get_next_pid()
 {
-    if (sjf_queue.processes[0] != NULL)
+    if (scheduling_algorithm == 1)
     {
-        return sjf_queue.processes[0]->pid;
+        if (sjf_queue.processes[0] != NULL)
+        {
+            return sjf_queue.processes[0]->pid;
+        }
+        else
+        {
+            return -1;
+        }
     }
-    else
-        return -1;
-};
+    else if (scheduling_algorithm == 0)
+    {
+        for (int i = 0; i < MAX_PRIORITY_LEVELS; i++)
+        {
+            if (priority_queues[i].rear != -1)
+            {
+                return priority_queues[i].queue[0]->pid;
+            }
+        }
+        return -1; // Nenhum processo disponível
+    }
+    return -1; // Caso inválido
+}
 
 Process *choose_process_sjf()
 {
     return remove_from_sjf_queue();
-}
-
-void update_statistics(Process *process)
-{
-    if (process->state == 0)
-    { // Ready
-        process->ready_time++;
-    }
-    else if (process->state == 2)
-    { // Wait
-        process->wait_time++;
-    }
-    else if (process->state == 1)
-    { // Running
-        process->total_time++;
-    }
 }
 
 void parse_input(char *filename)
@@ -425,7 +425,9 @@ int main(int argc, char **argv)
             }
         }
         if (all_finished)
+        {
             break;
+        }
 
         if (verbose)
         {
@@ -435,17 +437,20 @@ int main(int argc, char **argv)
                 printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
                        solicitouIO);
                 printListaDeTerminosIO();
-                if (scheduling_algorithm = 1)
+
+                if (nextPID != current_process->pid && current_process->remaining_time > 0 && solicitouIO == false)
                 {
-                    if (nextPID != current_process->pid && current_process->remaining_time > 0 && solicitouIO == false)
-                    {
-                        printf("0\n");
-                        printf("Processo preemptado\n");
-                    }
-                    else
-                    {
-                        printf("%d\n", current_process->state);
-                    };
+                    printf("0\n");
+                }
+                else if(solicitouIO)
+                {
+                    printf("2\n", current_process->state);
+                }
+                else if (current_process->remaining_time > 0) {
+                    printf("1\n");
+                }
+                else {
+                    printf("3\n");
                 };
             }
         }
