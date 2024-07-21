@@ -18,6 +18,7 @@ typedef struct
     float estimated_burst_time;
     int remaining_time;
     int priority;
+    int quantum;
     int state; // 0: Ready, 1: Running, 2: Waiting, 3: Finished
     int ready_time;
     int wait_time;
@@ -45,6 +46,7 @@ int scheduling_algorithm = 0; // 0: FMP, 1: SJF
 float aging_factor = 0.5;
 bool verbose = false;
 bool process_finished = false;
+Process *current_process = NULL;
 
 // variaveis relacionadas com SJF
 float ultimo_burst_time = 5;
@@ -53,6 +55,9 @@ float ultimo_burst_time_estimado = 5;
 // variaveis relacionadas ao verbose
 int listaTerminosIO[MAX_PROCESSES];
 int existem_terminos = 0;
+
+// variaveis relacionadas ao priority queue
+int quantum_restante = 0;
 
 void inserirNaListaDeTerminosIO(int pid)
 {
@@ -110,6 +115,11 @@ int IOTerm()
         return 0;
 }
 
+int calculate_quantum(int priority)
+{
+    return (1 << priority); // 2^priority
+}
+
 void init_priority_queues()
 {
     for (int i = 0; i < MAX_PRIORITY_LEVELS; i++)
@@ -127,6 +137,7 @@ void enqueue(PriorityQueue *pq, Process *process)
     pq->rear++;
     pq->queue[pq->rear] = process;
     process->state = 0;
+    process->quantum = calculate_quantum(process->priority);
 }
 
 Process *dequeue(PriorityQueue *pq)
@@ -145,6 +156,7 @@ Process *dequeue(PriorityQueue *pq)
     }
     pq->rear--;
 
+    quantum_restante = process->quantum;
     return process;
 }
 
@@ -262,6 +274,7 @@ void parse_input(char *filename)
         process.total_time = 0;
         process.estimated_burst_time = 0;
         processes[process_count++] = process;
+        process.quantum = -1;
     }
 
     fclose(file);
@@ -269,25 +282,49 @@ void parse_input(char *filename)
 
 void print_statistics()
 {
-    printf("=========+=================+=================+============   \n");
-    printf("Processo | Tempo total     | Tempo total     | Tempo total   \n");
+    printf("=========+=================+=================+============\n");
+    printf("Processo | Tempo total     | Tempo total     | Tempo total\n");
     printf("         | em estado Ready | em estado Wait  | no processador\n");
-    printf("=========+=================+=================+============    \n");
+    printf("=========+=================+=================+============\n");
+
+    int total_execution_time = 0;
+    int total_ready_wait_time = 0;
+    int min_execution_time = processes[0].total_time;
+    int max_execution_time = processes[0].total_time;
 
     for (int i = 0; i < process_count; i++)
     {
         printf("%d       | %d               | %d               | %d\n", processes[i].pid, processes[i].ready_time,
                processes[i].wait_time, processes[i].total_time);
+
+        total_execution_time += processes[i].total_time;
+        total_ready_wait_time += processes[i].ready_time + processes[i].wait_time;
+
+        if (processes[i].total_time < min_execution_time)
+        {
+            min_execution_time = processes[i].total_time;
+        }
+
+        if (processes[i].total_time > max_execution_time)
+        {
+            max_execution_time = processes[i].total_time;
+        }
     }
+
+    float avg_execution_time = (float)total_execution_time / process_count;
+    float avg_ready_wait_time = (float)total_ready_wait_time / process_count;
 
     printf("=========+=================+=================+============\n");
     printf("Tempo total de simulação.: %d\n", clock);
     printf("Número de processos......: %d\n", process_count);
+    printf("Menor tempo de execução..: %d\n", min_execution_time);
+    printf("Maior tempo de execução..: %d\n", max_execution_time);
+    printf("Tempo médio de execução..: %.2f\n", avg_execution_time);
+    printf("Tempo médio em Ready/Wait: %.2f\n", avg_ready_wait_time);
 }
 
 int main(int argc, char **argv)
 {
-    Process *current_process = NULL;
     char *input_filename = NULL;
 
     for (int i = 1; i < argc; i++)
@@ -363,44 +400,13 @@ int main(int argc, char **argv)
             }
         }
 
-        if (scheduling_algorithm == 0)
+        if (scheduling_algorithm == 0 && quantum_restante == 0)
         {
             current_process = choose_process_fmp();
         }
         else if (scheduling_algorithm == 1)
         {
             current_process = choose_process_sjf();
-        }
-
-        if (current_process != NULL)
-        {
-            current_process->remaining_time--;
-            current_process->total_time++;
-
-            if (current_process->remaining_time == 0)
-            {
-                current_process->state = 3; // Finished
-                ultimo_burst_time = current_process->burst_time * 1.0;
-            }
-            else if (IOReq() && current_process->state == 1)
-            {
-                solicitouIO = 1;
-                current_process->state = 2; // Wait
-            }
-            else
-            {
-                if (scheduling_algorithm == 0 && current_process->state != 3 && current_process->state != 2)
-                {
-                    if (current_process->remaining_time > 0)
-                    {
-                        enqueue(&priority_queues[current_process->priority], current_process);
-                    }
-                }
-                else if (scheduling_algorithm == 1 && current_process->state != 3 && current_process->state != 2)
-                {
-                    add_to_sjf_queue(current_process);
-                }
-            }
         }
 
         for (int i = 0; i < process_count; i++)
@@ -412,6 +418,44 @@ int main(int argc, char **argv)
             if (processes[i].state == 0)
             {
                 processes[i].ready_time++;
+            }
+        }
+
+        if (current_process != NULL)
+        {
+            current_process->remaining_time--;
+            current_process->total_time++;
+            if (scheduling_algorithm == 0)
+            {
+                quantum_restante--;
+            };
+
+            if (current_process->remaining_time == 0)
+            {
+                current_process->state = 3; // Finished
+                quantum_restante = 0;
+                ultimo_burst_time = current_process->burst_time * 1.0;
+            }
+            else if (IOReq() && current_process->state == 1)
+            {
+                solicitouIO = 1;
+                current_process->state = 2; // Wait
+                quantum_restante = 0;
+            }
+            else
+            {
+                if (scheduling_algorithm == 0 && current_process->state != 3 && current_process->state != 2 && quantum_restante == 0)
+                {
+                    if (current_process->priority != MAX_PRIORITY_LEVELS - 1)
+                    {
+                        current_process->priority++;
+                    }
+                    enqueue(&priority_queues[current_process->priority], current_process);
+                }
+                else if (scheduling_algorithm == 1 && current_process->state != 3 && current_process->state != 2)
+                {
+                    add_to_sjf_queue(current_process);
+                }
             }
         }
 
@@ -431,33 +475,70 @@ int main(int argc, char **argv)
 
         if (verbose)
         {
-            int nextPID = get_next_pid();
-            if (current_process != NULL && nextPID != -1)
+            if (scheduling_algorithm == 0)
             {
-                printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
-                       solicitouIO);
-                printListaDeTerminosIO();
+                if (current_process != NULL)
+                {
+                    printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
+                           solicitouIO);
+                    printListaDeTerminosIO();
 
-                if (nextPID != current_process->pid && current_process->remaining_time > 0 && solicitouIO == false)
+                    if (quantum_restante == 0 && current_process->remaining_time > 0 && solicitouIO == false)
+                    {
+                        printf("0\n");
+                    }
+                    else if (solicitouIO)
+                    {
+                        printf("2\n");
+                    }
+                    else if (current_process->remaining_time > 0)
+                    {
+                        printf("1\n");
+                    }
+                    else
+                    {
+                        printf("3\n");
+                    };
+                }
+                else if (current_process == NULL)
                 {
-                    printf("0\n");
+                    printf("%d:-1:-1:%d:", clock, solicitouIO);
+                    printListaDeTerminosIO();
+                    printf("-1\n");
                 }
-                else if(solicitouIO)
-                {
-                    printf("2\n");
-                }
-                else if (current_process->remaining_time > 0) {
-                    printf("1\n");
-                }
-                else {
-                    printf("3\n");
-                };
             }
-            else if (current_process == NULL)
+            else if (scheduling_algorithm == 1)
             {
-                printf("%d:-1:-1:%d:", clock, solicitouIO);
-                printListaDeTerminosIO();
-                printf("-1\n");
+                int nextPID = get_next_pid();
+                if (current_process != NULL && nextPID != -1)
+                {
+                    printf("%d:%d:%d:%d:", clock, current_process->pid, current_process->remaining_time,
+                           solicitouIO);
+                    printListaDeTerminosIO();
+
+                    if (nextPID != current_process->pid && current_process->remaining_time > 0 && solicitouIO == false)
+                    {
+                        printf("0\n");
+                    }
+                    else if (solicitouIO)
+                    {
+                        printf("2\n");
+                    }
+                    else if (current_process->remaining_time > 0)
+                    {
+                        printf("1\n");
+                    }
+                    else
+                    {
+                        printf("3\n");
+                    };
+                }
+                else if (current_process == NULL)
+                {
+                    printf("%d:-1:-1:%d:", clock, solicitouIO);
+                    printListaDeTerminosIO();
+                    printf("-1\n");
+                }
             }
         }
         limparListaDeTerminosIO();
