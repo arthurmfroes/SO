@@ -444,7 +444,7 @@ int main(int argc, char **argv)
                 }
                 else if(solicitouIO)
                 {
-                    printf("2\n", current_process->state);
+                    printf("2\n");
                 }
                 else if (current_process->remaining_time > 0) {
                     printf("1\n");
@@ -452,6 +452,12 @@ int main(int argc, char **argv)
                 else {
                     printf("3\n");
                 };
+            }
+            else if (current_process == NULL)
+            {
+                printf("%d:-1:-1:%d:", clock, solicitouIO);
+                printListaDeTerminosIO();
+                printf("-1\n");
             }
         }
         limparListaDeTerminosIO();
