@@ -253,6 +253,13 @@ Process *choose_process_sjf()
     return remove_from_sjf_queue();
 }
 
+int compare_arrival_time(const void *a, const void *b)
+{
+    Process *processA = (Process *)a;
+    Process *processB = (Process *)b;
+    return processA->arrival_time - processB->arrival_time;
+}
+
 void parse_input(char *filename)
 {
     FILE *file = fopen(filename, "r");
@@ -273,11 +280,13 @@ void parse_input(char *filename)
         process.wait_time = 0;
         process.total_time = 0;
         process.estimated_burst_time = 0;
-        processes[process_count++] = process;
         process.quantum = -1;
+        processes[process_count++] = process;
     }
 
     fclose(file);
+
+    qsort(processes, process_count, sizeof(Process), compare_arrival_time);
 }
 
 void print_statistics()
